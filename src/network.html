@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<head>
+<!-- Bootstrap used for the positioning divs -->
+<!-- Latest compiled and minified CSS -->
+<link rel="stylesheet" href="../lib/bootstrap3/css/bootstrap.min.css">
+<link rel="stylesheet" href="../lib/css/font-awesome.min.css">
+<!-- Latest compiled and minified JavaScript -->
+<script src="../lib/jquery/jquery-3.2.1.min.js"></script>
+<script src="../lib/bootstrap3/js/bootstrap.min.js"></script>
+<script src="../lib/d3/d3.min.js"></script>
+<style>
+
+/*Background color*/
+body{
+  background-color: #030708;
+  font-family: "Verdana", "Arial", "sans-serif";
+}
+
+/*To center (horizontally and vertically) the contents of the div*/
+div {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+button {
+    background-color:#030708;
+    border: none;
+    color: white;
+}
+
+.btn {
+  background-color:#030708; !important
+}
+
+#reset {
+  color:white; !important
+}
+
+#reset:hover {
+  color:#030708; !important
+}
+
+.btn:hover {
+  background-color:#322e2d; !important
+}
+
+button:active {
+    background-color:white;
+    border: none;
+}
+
+
+</style>
+</head>
+
+
+<body>
+<div class="row">
+  <div class="col-xs-1 col-sm-1 col-md-1"></div>
+  <div class="col-xs-10 col-sm-10 col-md-10" id='d3text'>
+    <h4 id='title'></h4>
+  </div>
+  <div class="col-xs-1 col-sm-1 col-md-1"></div>
+</div>
+
+<div class='row'>
+<div  id='d3legend'>
+
+
+</div>
+</div>
+<br>
+<div class='row'>
+<div  id='d3status'>
+
+
+</div>
+</div>
+<div class='row'>
+<div  id='d3icons'>
+
+
+</div>
+</div>
+
+<div class="row">
+  <!-- For the D3 chart -->
+  <div class="col-xs-12 col-sm-12 col-md-12">
+    <div class="col-12 col-xs-12 col-sm-12 col-md-12" id='d3canvas'></div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-xs-4 col-sm-4 col-md-4"></div>
+  <div class="col-xs-4 col-sm-4 col-md-4" class='btn-group'>
+    <button class='btn' id='reset'><span class="glyphicon glyphicon-zoom-out" aria-hidden="true"></span></button>
+  </div>
+  <div class="col-xs-4 col-sm-4 col-md-4"></div>
+</div>
+
+
+<script>
+// Color palette
+
+// var dark = '#384558';
+var dark = '#030708';
+var darkshade = '#524358';
+var whiteshade = '#f0edf6'
+var shade1 = '#cb487a';
+var shade2 = '#8754a1';
+var shade3 = '#f27579';
+var shade4 = '#b2b1d0';
+var shade5 = '#71cfeb';
+var shade6 = '#fff697';
+var shade7 = '#fbbb8d';
+
+var margin = 0;
+var width = 1024 - 2*margin, height = 768 - 2*margin;
+var selectedarea;
+
+var baseRadius = 6*7 + 70;
+var radiusMul = 5;
+var radiusOffset1 = 25;
+var radiusOffset2 = 20;
+var alphaCoeff = 0.001
+
+var backgroundTextOpacity = 0.7;
+
+var textSizeBig = '18px';
+var textSize1 = '16px';
+var textSize2 = '16px';
+var textSize3 = '16px';
+var textSizeSmall = '12px';
+
+
+// By using margin and appending a g that is moved right and down by margin
+// Our chart will be within g
+var svg = d3.select('#d3canvas')
+            .append('svg')
+            .attr('width', width + 2*margin)
+            .attr('height', height + 2*margin)
+var g = svg.append('g')
+            .attr('transform', 'translate(' + margin + ',' + margin + ')');
+
+//add zoom capabilities 
+var zoom_handler = d3.zoom()
+    .on("zoom", zoom_actions);
+ 
+zoom_handler(svg);     
+ 
+function zoom_actions(){
+    g.attr("transform", d3.event.transform)
+}
+
+// Background color for the svg using a rect
+g.append('rect')
+    .attr('width', width + 2*margin)
+    .attr('height', height + 2*margin)
+    .attr('fill', dark);
+
+// Textbox at right - not activated
+var textBox = d3.select('#d3text')
+                .append('p');
+
+
+textBox
+  .append('h1')
+  .attr('class', 'descriptor')
+  // .attr('x', 0)
+  // .attr('y', 0)
+  .text('DATA GARDEN')
+  .style('color', '#d4e59f')
+  .style('opacity', 1.0)
+  // .style("font-family", "sans-serif")
+  .style('font-weight', 'bold')
+  .style("font-size", "30px")
+  .style('text-anchor', 'middle');
+
+d3.select("#reset")
+    .on("click", resetted);
+
+function resetted() {
+  svg.transition()
+      .duration(750)
+      .call(zoom_handler.transform, d3.zoomIdentity);
+}
+
+
+d3.csv('../data/network.csv', function(error, links){
+  if (error) throw error;
+
+  var nodes = {};
+
+  links.forEach(function(link){
+    // link source or target will equal Partner or Project if it exists
+    // OR it will create and assign 
+    link.source = nodes[link.Partner] || 
+                  (nodes[link.Partner] = {name: link.Partner, description: link.Description});
+
+    // Add new values to the node if it is a project
+    link.target = nodes[link.Project] || 
+                  (nodes[link.Project] = {name: link.Project, impact:link.Impact, 
+                                          area: link.Focus,
+                                          status:link.Completion,
+                                          description: link.Description});
+  });
+
+
+  var nodes = d3.values(nodes); // Returns an array of nodes - i.e. change nodes from an object to an array
+
+// Assigning additional values to each of the nodes array
+  nodes.forEach(function(d){
+    if(d.impact == 'Low'){
+      d.impactNum = 0.2;
+    } else if (d.impact == 'Medium'){
+      d.impactNum = 1.5;
+    } else if (d.impact == 'High'){
+      d.impactNum = 4;
+    } else {
+      d.impactNum = 6;
+    }
+  });
+
+
+  nodes.forEach(function(d){
+    if(d.area == 'Data'){
+      d.textOpacity = backgroundTextOpacity;
+    } else if (d.area == 'Governance'){
+      d.textOpacity = backgroundTextOpacity;
+    } else if (d.area == 'Analytics'){
+      d.textOpacity = backgroundTextOpacity;
+    } else if (d.area == 'Process'){
+      d.textOpacity = backgroundTextOpacity;
+    } else if (d.area == 'Infrastructure'){
+      d.textOpacity = backgroundTextOpacity;
+    } else if (d.area == 'Capabilities'){
+      d.textOpacity = backgroundTextOpacity;
+    } else if (d.area == 'Engagement'){
+      d.textOpacity = backgroundTextOpacity;
+    } else {
+      d.textOpacity = 1.0;
+    }
+  });
+
+  nodes.forEach(function(d){
+    if(d.area == 'Data'){
+      d.areaCol = shade1;
+    } else if (d.area == 'Governance'){
+      d.areaCol = shade2;
+    } else if (d.area == 'Analytics'){
+      d.areaCol = shade3;
+    } else if (d.area == 'Process'){
+      d.areaCol = shade4;
+    } else if (d.area == 'Infrastructure'){
+      d.areaCol = shade5;
+    } else if (d.area == 'Capabilities'){
+      d.areaCol = shade6;
+    } else if (d.area == 'Engagement'){
+      d.areaCol = shade7;
+    } else {
+      d.areaCol = '#d4e59f';
+    }
+  });
+
+  // This overrides the areaCol simply because it is called later
+  nodes.forEach(function(d){
+    if(d.status == 'Completed'){
+      d.areaCol = '#c1ccd2';
+    };
+  });
+
+  drawChart(nodes, links);
+
+  });
+// https://bl.ocks.org/shimizu/e6209de87cdddde38dadbb746feaf3a3
+   
+
+function drawChart(nodes, links, area) {
+
+// D3 simulation
+// Radius is from the impactNum - but with a buffer to push them apart
+
+	var repelForce = d3.forceManyBody().strength(-200).distanceMax(300).distanceMin(200);
+
+	var simulation = d3.forceSimulation()
+                      .force('link', d3.forceLink().links(links))
+                      //.force('charge', d3.forceManyBody())
+					  .force('repel', repelForce)
+                      .force('center', d3.forceCenter(width/2, height/2))
+                      .force('collision', d3.forceCollide().radius(function(d){
+                        return d.impactNum*radiusMul+radiusOffset1;
+                      }).iterations(25));
+					  // .force('x', d3.forceX(100))
+					  // .force('y', d3.forceY(0));
+
+  simulation.alphaTarget(alphaCoeff); // dampening for the force chart to settle down
+
+// Nodes, node and link
+// Node text is being done separately here for ease of manipulation
+// It's traditionally done by group them together under a g tag
+
+ 
+var link = g.append('g')
+            .attr('class', 'links')
+            .selectAll('line')
+            .data(links)
+            .enter()
+            .append('line')
+            .attr('stroke', 'white')
+            .attr('stroke-opacity', 0.6)
+            .attr('stroke-width', '0.4px')
+            .style('stroke-dasharray', '2');
+
+
+ var node = g.append('g')
+                .attr('class', 'nodes')
+                .selectAll('circle')
+                .data(nodes)
+                .enter()
+                .append('circle')			
+                .attr('r', function(d){
+                  return d.impactNum*radiusMul+radiusOffset2;
+                })
+                .attr('fill', 'white')
+                .attr('fill-opacity', 0.02)
+                .attr('stroke', function(d){
+                  return d.areaCol;
+                })
+                .attr('stroke-width', '55')
+                .attr('stroke-opacity', function(d){
+                  //return d.statusNum;
+				          //return 0.1+(d.impactNum/6);
+				          return d.textOpacity-0.2;
+                })
+                .style('stroke-dasharray', '1,3')
+				        .style('cursor', 'pointer')
+				        .on('click', connectedNodes)
+                // .on('mouseover', highlightNodes)
+                // .on('mouseout', highlightNodes)                
+                .on("touchstart", connectedNodes)
+                .call(d3.drag()
+                        .on('start', dragstarted)
+                        .on('drag', dragged)
+                        .on('end', dragended));
+
+
+  var nodetext = g.append('g')
+                .attr('class', 'nodestext')
+                .selectAll('circle')
+                .data(nodes)
+                .enter()
+                .append('text')
+				.attr('class', 'nodestext-text')
+                .text(function(d){return d.name;})
+                .style("font-size", textSize3)
+                .attr('font-weight', 'bold')
+                .attr('fill', function(d){
+                  return d.areaCol;
+                })
+                .attr('fill-opacity', function(d){
+                  //return 0.8+(d.impactNum/6);
+                  return d.textOpacity;
+                })
+                .style('pointer-events', 'none')
+                .style('text-anchor', 'middle')
+        .on('click', connectedNodes);
+
+
+
+var selectBox =   d3.selectAll('#d3legend').append('div').attr('class', 'btn-group');
+    
+    selectBox.append('button')
+              .attr('class', 'btn btn-default')
+              .text('Data')
+              .style('color', shade1)
+              .style("font-size", textSize1)
+			  .style('font-weight', 'bold')
+              .style('text-anchor', 'right')
+              .on('click', set);
+			  
+    selectBox.append('button')
+              .attr('class', 'btn btn-default')
+              .text('Governance')
+              .style('color', shade2)
+              .style("font-size", textSize1)
+			  .style('font-weight', 'bold')
+              .style('text-anchor', 'right')
+              .on('click', set);
+			  
+    selectBox.append('button')
+              .attr('class', 'btn btn-default')
+              .text('Analytics')
+              .style('color', shade3)
+              .style("font-size", textSize1)
+			  .style('font-weight', 'bold')
+              .style('text-anchor', 'right')
+              .on('click', set);
+
+    selectBox.append('button')
+              .attr('class', 'btn btn-default')
+              .text('Process')
+              .style('color', shade4)
+              .style("font-size", textSize1)
+			  .style('font-weight', 'bold')
+              .style('text-anchor', 'right')
+              .on('click', set);
+
+    selectBox.append('button')
+              .attr('class', 'btn btn-default')
+              .text('Infrastructure')
+              .style('color', shade5)
+              .style("font-size", textSize1)
+			  .style('font-weight', 'bold')
+              .style('text-anchor', 'right')
+              .on('click', set);
+
+    selectBox.append('button')
+              .attr('class', 'btn btn-default')
+              .text('Capabilities')
+              .style('color', shade6)
+               .style("font-size", textSize1)
+			  .style('font-weight', 'bold')
+              .style('text-anchor', 'right')
+              .on('click', set);
+
+    selectBox.append('button')
+              .attr('class', 'btn btn-default')
+              .text('Engagement')
+              .style('color', shade7)
+              .style("font-size", textSize1)
+			  .style('font-weight', 'bold')
+              .style('text-anchor', 'right')
+              .on('click', set);
+
+    selectBox.append('button')
+              .attr('class', 'btn btn-default')
+              .text('All')
+              .style('color', 'white')
+              .style("font-size", textSize1)
+			  .style('font-weight', 'bold')
+              .style('text-anchor', 'right')
+              .on('click', set);
+
+var selectStatus =   d3.selectAll('#d3status').append('div').attr('class', 'btn-group btn-group-xs');
+
+    selectStatus.append('button')
+              .attr('class', 'btn btn-default')
+              .text('Completed')
+              .style('color', 'white')
+              .style("font-size", textSize3)
+              .style('text-anchor', 'center')
+              .on('click', setStatus);
+    selectStatus.append('button')
+              .attr('class', 'btn btn-default')
+              .text('In Progress')
+              .style('color', 'white')
+              .style("font-size", textSize3)
+              .style('text-anchor', 'center')
+              .on('click', setStatus);
+    selectStatus.append('button')
+              .attr('class', 'btn btn-default')
+              .text('All')
+              .style('color', 'white')
+              .style("font-size", textSize3)
+              .style('text-anchor', 'center')
+              .on('click', setStatus);
+
+// This is what updates the simulation  and position of the elements
+  var ticked = function() {
+// The x and y coordinates are generated when we insert the arrays nodes and links into the simulation function below
+      // node
+      //     .attr('cx', function(d){return d.x;})
+      //     .attr('cy', function(d){return d.y;});     
+
+      // nodetext
+      //     .attr('x', function(d){return d.x;})
+      //     .attr('y', function(d){return d.y;});
+
+      // Edit to constraint the nodes within the svg - add invisible wall in a way
+      node
+          .attr('cx', function(d){return d.x = Math.max(baseRadius, Math.min(width-baseRadius, d.x));})
+          .attr('cy', function(d){return d.y = Math.max(baseRadius, Math.min(height-baseRadius, d.y));});
+
+
+      nodetext
+          .attr('x', function(d){return d.x = Math.max(baseRadius, Math.min(width-baseRadius, d.x));})
+          .attr('y', function(d){return d.y = Math.max(baseRadius, Math.min(height-baseRadius, d.y));});
+
+      link
+          .attr('x1', function(d){return d.source.x;})
+          .attr('y1', function(d) {return d.source.y;})
+          .attr('x2', function(d){return d.target.x;})
+          .attr('y2', function(d) {return d.target.y;});
+
+  }
+// Update
+//var numTicks = Math.ceil(Math.log(simulation.alphaMin()) / Math.log(1 - simulation.alphaDecay()))
+
+  simulation
+            .nodes(nodes)
+            .on('tick', ticked);
+
+  simulation.force('link')
+            .links(links);
+
+
+
+// Function for dragging
+  function dragstarted(d){
+    if (!d3.event.active) simulation.alphaTarget(alphaCoeff).restart();
+    d.fx = d.x;
+    d.dy = d.y;
+  }
+
+  function dragged(d){
+    d.fx = d3.event.x;
+    d.fy = d3.event.y;
+  }
+
+  function dragended(d){
+    if (!d3.event.active) simulation.alphaTarget(alphaCoeff);
+    d.fx = null;
+    d.fy = null;
+  }
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// For filtering
+
+function set(){
+  selectedarea = d3.select(this).text();
+
+// To filter by area
+  if (selectedarea == 'All'){
+      node
+          .transition()
+          .duration(1000)
+          .style('stroke-opacity', function(d){
+            //return 0.8+(d.impactNum/6);
+	          return d.textOpacity;
+				  })
+          .attr('r', function(d){
+            return d.impactNum*radiusMul+radiusOffset2;
+          });
+
+      nodetext
+          .transition()
+          .duration(1000)
+          .style('opacity', 1.0)
+    		  .style('fill', function(d){
+    			   return d.areaCol;
+    		  })
+		      .style('font-size', textSize3);
+
+  } else {
+      node
+          .transition()
+          .duration(1000)
+          .style('stroke-opacity', function(d){
+                return d.area==selectedarea ? 0.6 : 0.1;
+          })
+          .attr('r', function(d){
+            return d.impactNum*radiusMul+radiusOffset2;
+          });
+
+      nodetext
+          .transition()
+          .duration(1000)
+          .style('opacity', function(d){
+                return d.area==selectedarea ? 1.0 : 0.4;
+          })
+    		  .style('fill', function(d){
+                    return d.area==selectedarea ? 'white' : 'black';
+              })
+    		  .style('font-size', textSize3);
+			  
+  };
+}  
+
+function setStatus(){
+  selectedstatus = d3.select(this).text();
+  console.log(selectedstatus);
+
+// To filter by area
+  if (selectedstatus == 'All'){
+      node
+          .transition()
+          .duration(1000)
+          .style('stroke-opacity', function(d){
+            //return 0.8+(d.impactNum/6);
+            return d.textOpacity;
+          })
+          .attr('r', function(d){
+            return d.impactNum*radiusMul+radiusOffset2;
+          });
+
+      nodetext
+          .transition()
+          .duration(1000)
+          .style('opacity', 1.0)
+          .style('fill', function(d){
+             return d.areaCol;
+          })
+          .style('font-size', textSize3);
+
+  } else {
+      node
+          .transition()
+          .duration(1000)
+          .style('stroke-opacity', function(d){
+                return d.status==selectedstatus ? 0.6 : 0.1;
+          })
+          .attr('r', function(d){
+            return d.impactNum*radiusMul+radiusOffset2;
+          });
+
+      nodetext
+          .transition()
+          .duration(1000)
+          .style('opacity', function(d){
+                return d.status==selectedstatus ? 1.0 : 0.2;
+          })
+          .style('fill', function(d){
+                return d.status==selectedstatus ? 'white' : 'black';
+          });
+  };
+}  
+ 
+// To fade links and text
+  var toggle = 0;
+
+  var linkedByIndex = {};
+
+  for (i=0; i<simulation.nodes.length; i++){
+    linkedByIndex[i+','+i] = 1;
+  };
+
+  // force.links.forEach(function (d) {
+  //     linkedByIndex[d.source.index + "," + d.target.index] = 1;
+  // });
+
+  function neighboring(a, b){
+    return linkedByIndex[a.index + ',' + b.index];
+  }
+
+  function connectedNodes(){
+    // The tracker array is used for saving the positions of all the nodes that are connected in the current selection
+	tracker = [];
+	//  Toggle is needed here as we are using the same function for mouseover and mouseout
+	
+    if (toggle==0){
+      d = d3.select(this).node().__data__;
+
+      link
+          // .transition()
+          // .duration(100)
+          .style('opacity', function(o){
+            // If the index of d is equal to either the index of the source or target of the link
+                return d.index==o.source.index | d.index==o.target.index ? 0.8 : 0.2;
+          })
+          .style('stroke', function(o){
+                return d.index==o.source.index | d.index==o.target.index ? 'white' : whiteshade;
+          })
+          .style('stroke-width', function(o){
+                return d.index==o.source.index | d.index==o.target.index ? '1px' : '0.5px';
+          });
+
+      node
+          .transition()
+          .duration(800)
+          .ease(d3.easeCubic)
+          // .attr('cx', width/2)
+          // .attr('cy', height/2)
+          .style('stroke-opacity', function(o){
+                return d.index==o.index ? 0.1 : 0.05;
+          })
+          .style('fill-opacity', function(o){
+                return d.index==o.index ? 0.01 : 0.005;
+          })
+          .attr('r', function(o){
+                return d.index==o.index ? d.impactNum*6 : d.impactNum*8;
+          });
+          // .style('stroke', function(o){
+          //       return d.index==o.index ? 'yellow' : 'white';
+          // });
+
+      nodetext
+          // .transition()
+          // .duration(40)
+          .style('opacity', function(o){
+                return d.index==o.index ? 1.0 : 0.1;
+          })
+          .style('font-style', function(o){
+                return d.index==o.index ? 'bold' : 'normal';
+          })
+          .style('font-size', function(o){
+                return d.index==o.index ? textSizeBig : textSize2;
+          });
+          // .style('fill', function(o){
+          //             return d.index==o.index ? 'white' : '#e2eff7';
+          //       });
+		  
+		link.each(function(l){
+			if(d.index==l.source.index | d.index==l.target.index){
+				// If there is hit, it means they are connected. Just push both into the tracker array.
+				tracker.push(l.source.index, l.target.index);
+			};
+		});
+		//console.log(tracker);
+		
+		tracker.forEach(function(t){
+			nodetext.each(function(n){
+			
+			if(n.index == t){
+				d3.select(this).style('opacity', 1.0).style('font-size', textSize3).style('fill', 'white');
+			};
+			
+			});
+		});
+		
+      //textIn();
+	   //simulation.alphaTarget(0.0);
+      toggle = 1;
+    } else {
+
+      // Note: Need to use styles instead of attr here for the change to take effect, probably because we used this to access the style
+      nodetext.transition().duration(300)
+      				  .style("font-size", textSize3)
+                .style('fill', function(d){
+                  return d.areaCol;
+                })
+                .style('opacity', function(d){
+                  //return 0.8+(d.impactNum/6);
+				          return d.textOpacity;
+                })
+                .style('pointer-events', 'none')
+                .style('text-anchor', 'middle');	
+				
+      node.transition().duration(300)
+                        .attr('r', function(d){
+                              return d.impactNum*radiusMul+radiusOffset2;
+                        })
+                        .style('stroke', function(d){
+                          return d.areaCol;
+                        })
+                        .style('stroke-width', '55')
+                        .style('stroke-opacity', function(d){
+                          return d.textOpacity-0.2;
+                        });
+
+      link.transition().duration(1000).style('opacity', 0.9);
+      link.transition().duration(1000).style('stroke', 'white').style('stroke-width', '0.5px');
+      //textOut();
+	     //simulation.alphaTarget(0.05);
+      toggle = 0;
+    }
+    }
+// End fade links
+
+// Highlights
+
+  function highlightNodes(){
+
+    if (toggle==0){
+      d = d3.select(this).node().__data__;
+
+      nodetext
+          .transition()
+          .duration(300)
+          .style('opacity', function(o){
+                return d.index==o.index ? 1.0 : 0.3;
+          });
+      toggle = 1;
+    } else {
+
+      nodetext.transition().duration(300)
+                .style('opacity', function(d){
+                  //return 0.8+(d.impactNum/6);
+                  return d.textOpacity;
+                });
+      toggle = 0;
+    }
+    }
+// End fade links
+
+
+
+
+
+
+
+
+
+
+// End Highlights
+// Text appear and fade for the textBox
+  function textIn(){
+    textBox.transition().duration(2000)
+        .style('opacity', 1.0)
+        .text(d.description)
+        .style('color', 'white')
+        .style('opacity', 1.0)
+        .style("font-family", "sans-serif")
+        .style("font-size", "12px")
+        .style('text-anchor', 'middle');
+  }
+
+  function textOut(){
+    textBox.transition().duration(1000)
+        .style("font-size", "16px")
+        .text('The Data Garden');
+        // .style('opacity', 0.0);
+  }
+
+
+}
+
+
+// });
+
+</script>
+</body>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<head>
+<script src="../lib/d3/d3.min.js"></script>
+<style>
+
+h4{
+    color: steelblue;
+}
+text{
+    fill: steelblue;
+}
+</style>
+</head>
+
+<body>
+<h4 fill='black'>Barebones Chart</h4>
+<svg width = "600" height = "600">
+
+<g>
+<line stroke='steelblue' x1="90" x2="90" y1="5" y2="371">
+</line>
+</g>
+
+
+<g>
+<line stroke='steelblue' x1="90" x2="705" y1="370" y2="370"></line>
+</g>
+
+<g transform='translate(0,10)'>
+<text x="100" y="400">2013</text>
+<text x="246" y="400">2014</text>
+<text x="392" y="400">2015</text>
+<text x="538" y="400">2016</text>
+<text x="684" y="400">2017</text>
+<text x="400" y="440">Dates</text>
+</g>
+
+<g transform='translate(-10,0)'>
+<text x="80" y="15">60</text>
+<text x="80" y="131">40</text>
+<text x="80" y="248">20</text>
+<text x="80" y="373">0</text>
+<text x="40" y="200">Levels</text>
+</g>
+
+<g>
+<circle cx="90" cy="192" r="4" fill='steelblue'></circle>
+<circle cx="240" cy="141" fill='steelblue' r="4"></circle>
+<circle cx="388" cy="179" fill='steelblue' r="4"></circle>
+<circle cx="531" cy="200" fill='steelblue' r="4"></circle>
+<circle cx="677" cy="104" fill='steelblue' r="4"></circle>
+</g>
+
+<polyline
+     fill="none"
+     stroke="steelblue"
+     stroke-width="1"
+     points="
+       90,192
+       240,141
+       388,179
+       531,200
+       677,104"/>
+</svg>
+
+</body>
+
+
+
+

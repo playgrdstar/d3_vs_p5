@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<head>
+<!-- Bootstrap used for the positioning divs -->
+<!-- Latest compiled and minified CSS -->
+<link rel="stylesheet" href="../lib/bootstrap3/css/bootstrap.min.css">
+<link rel="stylesheet" href="../lib/css/font-awesome.min.css">
+<!-- Latest compiled and minified JavaScript -->
+<script src="../lib/jquery/jquery-3.2.1.min.js"></script>
+<script src="../lib/bootstrap3/js/bootstrap.min.js"></script>
+<script src="../lib/d3/d3.min.js"></script>
+
+<style>
+
+/* This is the CSS portion - it styles the page*/
+
+html {
+    min-height: 100%;
+}
+
+body {
+    height: 100%; /* or min-height */
+    padding:0;
+    margin:0;
+    background: #1d8acb;
+}
+
+/*html, body{
+  background-color: #1d8acb;
+}*/
+
+/*To center (horizontally and vertically) the contents of the div*/
+div {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/*Style for the headers*/
+h3, h5 {
+	color: white;
+}
+
+
+/* Style of axis */
+.axis line {
+	stroke: #f2eaf5;
+}
+
+.axis.stream path {
+  stroke: none;
+}
+.axis path {
+	stroke: #f2eaf5;
+}
+
+.axis text {
+	fill: #f2eaf5;
+}
+
+
+</style>
+</head>
+
+
+<body>
+
+<!-- Bootstrap at work -->
+<div class='row'>
+  <h3>a simple set</h3>
+</div>
+
+<!-- The row, col etc are Bootstrap classes that allow for responsive viewing and placement -->
+<!-- You could write the CSS yourself, but why do so when there is a framework to help you! -->
+<div class="row">
+<div class="col-4"></div>
+<div class="col-4" id = 'tickerselector'></div>
+<div class="col-4"></div>
+</div>
+
+
+<div class="row">
+<div class="col-12" id = 'd3returnsline'></div>
+</div>
+
+<div class="row">
+<div class="col-12" id = 'd3line'></div>
+</div>
+
+
+
+<!-- The parts below between the script tags are all JS code -->
+<script>
+
+
+
+// Dropdown for selection of tickers
+// =======================
+var color1 = '#f2eaf5'
+
+var tickers = [{ticker:'EURUSD'}, 
+				{ticker:'GBPUSD'}, 
+				{ticker:'USDJPY'}]
+
+var tickerselector = d3.select('#tickerselector');
+
+tickerselector.append('select')
+				.selectAll('option')
+				.data(tickers)
+				.enter()
+				.append('option')
+				.attr('value', function(d){
+					return d.ticker;
+				})
+				.text(function(d){
+					return d.ticker;
+				});
+
+
+// End Dropdown for selection of tickers
+
+
+// =======================
+// Start draw line functions
+
+var lcmargin = 30;
+var lcwidth = 800 - 2*lcmargin;
+var lcheight = 200 - 2*lcmargin;
+
+var linesvg = d3.select('#d3line')
+			.append('svg')
+			.attr('width', lcwidth + 2*lcmargin)
+			.attr('height', lcheight + 2*lcmargin)
+		.append('g')
+			.attr('transform', 
+				'translate(' + lcmargin + ',' + lcmargin + ')');
+
+linesvg.append('text')
+        .attr('x', lcwidth/2)
+        .attr('y', lcmargin-45)
+        .style('text-anchor', 'middle')
+        .style('fill', color1)
+        .style('font-size', '10px')
+        .text('Currency Rates');
+
+
+var parseTime = d3.timeParse('%Y-%m-%d %H:%M:%S');
+
+var lineX = d3.scaleTime().range([0,lcwidth]);
+var lineY = d3.scaleLinear().range([lcheight,0]);
+
+// Remember to surrond the d.Date and d.Price with the x and y scalers declared earlier
+//  I forget this all the time and my chart's scaling goes haywire and flies off the window
+var valueLine = d3.line()
+					.curve(d3.curveCatmullRom)
+					.x(function(d){return lineX(d.Date);})
+					.y(function(d){return lineY(d.Price);});
+
+var xAxisCallLine = d3.axisBottom().ticks(5);
+var yAxisCallLine = d3.axisLeft().ticks(5);
+
+var initialiseLine = function(ticker){
+	// d3 line chart
+	// declaring the width, height and margins
+
+	d3.csv('../data/' + ticker+'.csv', function(error, data){
+		if (error) throw error;
+
+		data.forEach(function(d){
+			d.Date = parseTime(d.time);
+			d.Price = +d.c;
+		});
+
+		lineX.domain(d3.extent(data, function(d){
+			return d.Date;
+		}));
+
+		lineY.domain([
+			d3.min(data, function(d){return d.Price;}),
+			d3.max(data, function(d){return d.Price;})
+		]);
+
+		xAxisCallLine.scale(lineX);
+		yAxisCallLine.scale(lineY);
+
+		linesvg.append('path')
+			.data([data])
+			.attr('class', 'line')
+			.attr('d', valueLine)
+			.style('fill', 'none')
+			.style('stroke', color1)
+			.style('stroke-width', '1px');
+
+    // linesvg.selectAll('.dot')
+    //         .data(data)
+    //         .enter()
+    //         .append('circle')
+    //         .attr('class', 'dot')
+    //         .attr('cx', function(d){
+    //           return lineX(d.Date);
+    //         })
+    //         .attr('cy', function(d){
+    //           return lineY(d.Price);
+    //         })
+    //         .attr('r', 3)
+    //         .style('fill', 'none')
+    //         .style('stroke', 'white')
+    //         .style('stroke-width', '0.1px');
+
+		linesvg.append('g')
+			.attr('transform', 'translate(0,' + lcheight + ')')
+			.attr('class', 'x axis')
+			.call(xAxisCallLine);
+
+		linesvg.append('g')
+			.attr('class', 'y axis')
+			.call(yAxisCallLine);
+
+
+			});
+
+
+
+
+}
+
+
+var updateLine = function(ticker){
+	// d3 line chart
+	// declaring the width, height and margins
+
+	d3.csv('../data/' + ticker+'.csv', function(error, data){
+		if (error) throw error;
+
+		data.forEach(function(d){
+			d.Date = parseTime(d.time);
+			d.Price = +d.c;
+		});
+
+		lineX.domain(d3.extent(data, function(d){
+			return d.Date;
+		}));
+
+		lineY.domain([
+			d3.min(data, function(d){return d.Price;}),
+			d3.max(data, function(d){return d.Price;})
+		]);
+
+		xAxisCallLine.scale(lineX);
+		yAxisCallLine.scale(lineY);
+
+		d3.selectAll('.line')
+			.data([data])
+			.attr('class', 'line')
+			.transition()
+			.duration(1000)
+			.attr('d', valueLine);
+			// .style('fill', 'none')
+			// .style('stroke', color1)
+			// .style('stroke-width', '1px');
+
+		d3.select('.x')
+			.transition()
+			.duration(750)
+			.call(xAxisCallLine);
+
+		d3.select('.y')
+			.transition()
+			.duration(750)
+			.call(yAxisCallLine);
+			});
+
+}
+// End draw line functions
+// =======================
+
+
+// =======================
+// Start returns line functions
+
+// var tticker = 'EURUSD';
+
+var rlmargin = 30;
+var rlwidth = 800 - 2*rlmargin;
+var rlheight = 200 - 2*rlmargin;
+
+var returnssvg = d3.select('#d3returnsline')
+                    .append('svg')
+                    .attr('width', rlwidth + 2*rlmargin)
+                    .attr('height', rlheight + 2*rlmargin)
+                  .append('g')
+                    .attr('transform', 'translate(' + rlmargin + ',' + rlmargin + ')');
+
+
+var returnstitle = returnssvg.append('text')
+                              .text('Monthly Returns')
+                              .attr('x', rlwidth/2)
+                              .attr('y', rlmargin-35)
+                              .style('text-anchor', 'middle')
+                              .style('fill', color1)
+                              .style('font-size', '10px');
+
+var parseNestTime = d3.timeParse('%b-%d-%Y');
+
+var formatTitleTime = d3.timeFormat('%b-%y');
+var formatNum = d3.format('.2f');
+
+var retX = d3.scaleTime().range([0, rlwidth]);
+var retY = d3.scaleLinear().range([rlheight, 0]);
+
+var xAxisCallRets = d3.axisBottom();
+var yAxisCallRets = d3.axisLeft().tickFormat(formatNum);
+
+var xAxisRets = returnssvg.append('g')
+                          .attr('class', 'x axis')
+                          .attr('transform', 'translate(0' + ',' + rlheight + ')');
+
+var yAxisRets = returnssvg.append('g')
+                          .attr('class', 'y axis');
+
+var updateReturnsLine = function(ticker){
+                          
+
+  var monthlyReturnsArray = [];
+
+  d3.csv('../data/' + ticker +'.csv', function(error, data){
+    if (error) throw error;
+
+    // Making the temp value equal to the first closing price so that the first returns is just 0
+    // console.log(+data[0].c);
+    var temp = +data[0].c;
+
+    data.forEach(function(d){
+      d.Date = parseTime(d.time);
+      d.Returns = Math.log(+d.c/temp);
+      temp = +d.c;
+    })
+
+
+    console.log(data);
+
+    var monthlyReturns = d3.nest()
+                            .key(function(d){return d3.timeMonth(d.Date);})
+                            .rollup(function(leaves){
+                              return {
+                                'mean': d3.mean(leaves, function(d){return d.Returns;}),
+                                'max': d3.max(leaves, function(d){return d.Returns;})
+                              }
+                            })
+                            .entries(data);
+
+
+
+    console.log(monthlyReturns);
+
+    monthlyReturns.forEach(function(d){
+      m = {'Date': parseNestTime(d.key.split(' ').slice(1,4).join('-')), 'Returns': d.value.mean*100};
+      // console.log(m);
+      monthlyReturnsArray.push(m);
+    })
+
+    console.log(monthlyReturnsArray);
+
+    retX.domain(d3.extent(monthlyReturnsArray, function(d){return d.Date;}));
+    retY.domain([
+      d3.min(monthlyReturnsArray, function(d){return d.Returns;}),
+      d3.max(monthlyReturnsArray, function(d){return d.Returns;})
+    ]);
+
+    xAxisCallRets.scale(retX).ticks(15);
+    yAxisCallRets.scale(retY).ticks(5);
+
+    // This is just to demonstrate how the scaling function retX and retY work
+    // testDate = new Date(2001, 5, 1);
+    // console.log(testDate);
+    // console.log(retX(testDate));
+    // console.log(retY(0.0));
+
+
+    // var retDots = returnssvg.selectAll('.retdot')
+    //                         .remove()
+    //                         .exit()
+    //                         .data(monthlyReturnsArray);
+
+    // retDots.enter()
+    //         .append('circle')
+    //         .transition()
+    //         .duration(1000)
+    //         .attr('class', 'retdot')
+    //         .attr('cx', function(d){
+    //           return retX(d.Date);
+    //         })
+    //         .attr('cy', function(d){
+    //           return retY(d.Returns);
+    //         })
+    //         .attr('r', 1)
+    //         .style('fill', color1);
+
+    var retDots = returnssvg.selectAll('.retdot')
+                            .data(monthlyReturnsArray);
+
+    retDots.enter()
+            .append('circle')
+            .on('mouseover', changeTitle)
+            .on('mouseout', revertTitle)
+            .merge(retDots)
+            .transition()
+            .duration(500)
+            .attr('class', 'retdot')
+            .attr('cx', function(d){
+              return retX(d.Date);
+            })
+            .attr('cy', function(d){
+              return retY(d.Returns);
+            })
+            .attr('r', 2)
+
+            .style('fill', color1);
+
+
+    retDots.exit().remove();
+
+
+    xAxisRets.transition().duration(100).call(xAxisCallRets);
+    yAxisRets.transition().duration(100).call(yAxisCallRets);
+
+
+    function changeTitle(d){
+      // console.log(d.Date);
+      returnstitle.transition()
+                  .duration(500)
+                  .text('Monthly Returns | ' + formatTitleTime(d.Date) + ' | ' + formatNum(d.Returns));
+    }
+
+    function revertTitle(){
+      returnstitle.transition().duration(500).text('Monthly Returns');
+    }
+
+  });
+}
+
+
+
+// =======================
+// =======================
+// Start drawing all the charts!!
+
+initialiseLine('EURUSD');
+updateReturnsLine('EURUSD');
+
+tickerselector.on('change', function(){
+	ticker = d3.select(this).select('select').property('value');
+	updateLine(ticker);
+  updateReturnsLine(ticker);
+})
+// =======================
+
+</script>
+</body>
+
+
+
+

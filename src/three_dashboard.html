@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<head>
+<!-- Bootstrap used for the positioning divs -->
+<!-- Latest compiled and minified CSS -->
+<link rel="stylesheet" href="../lib/bootstrap3/css/bootstrap.min.css">
+<link rel="stylesheet" href="../lib/css/font-awesome.min.css">
+<!-- Latest compiled and minified JavaScript -->
+<script src="../lib/jquery/jquery-3.2.1.min.js"></script>
+<script src="../lib/bootstrap3/js/bootstrap.min.js"></script>
+<script src="../lib/d3/d3.min.js"></script>
+
+<style>
+
+/* This is the CSS portion - it styles the page*/
+
+html {
+    min-height: 100%;
+}
+
+body {
+    height: 100%; /* or min-height */
+    padding:0;
+    margin:0;
+    background: #1d8acb;
+}
+
+/*html, body{
+  background-color: #1d8acb;
+}*/
+
+/*To center (horizontally and vertically) the contents of the div*/
+div {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/*Style for the headers*/
+h3, h5 {
+	color: white;
+}
+
+
+/* Style of axis */
+.axis line {
+	stroke: #f2eaf5;
+}
+
+.axis.stream path {
+  stroke: none;
+}
+.axis path {
+	stroke: #f2eaf5;
+}
+
+.axis text {
+	fill: #f2eaf5;
+}
+
+/* Style for the mouseovers */
+div.tooltip {
+  position: absolute;
+  text-align: center;
+  width: 60px;
+  height: 40px;
+  padding: 2px;
+  font: 8px sans-serif;
+  background: lightsteelblue;
+  border: 0px;
+  border-radius: 2px;
+}
+
+div.streamoverlay {
+  color: white;
+  position: absolute;
+  text-align: center;
+  width: 60px;
+  height: 40px;
+  padding: 2px;
+  font: 8px sans-serif;
+  border: 0px;
+  border-radius: 2px;
+}
+
+/* Using CSS to do animation */
+
+rect.barcharts:hover, path.piechart:hover {
+  fill-opacity: 0.2;
+  stroke: white;
+}
+
+</style>
+</head>
+
+
+<body>
+
+<!-- Bootstrap at work -->
+<div class='row'>
+  <h3>a simple dashboard blueprint</h3>
+</div>
+
+<!-- The row, col etc are Bootstrap classes that allow for responsive viewing and placement -->
+<!-- You could write the CSS yourself, but why do so when there is a framework to help you! -->
+<div class="row">
+<div class="col-4"></div>
+<div class="col-4" id = 'tickerselector'></div>
+<div class="col-4"></div>
+</div>
+
+<div class="row">
+<div class="col-6" id = 'd3histogram'></div>
+<div class="col-6" id = 'd3boxplot'></div>
+</div>
+
+<div class="row">
+<div class="col-12" id = 'd3returnsline'></div>
+</div>
+
+<div class="row">
+<div class="col-12" id = 'd3line'></div>
+</div>
+
+<hr style="border-top: dotted 1px; color: white;"/>
+
+<div class='row'>
+  <h5>comparison charts</h5>
+</div>
+
+<div class="row">
+<div class="col-6" id = 'd3pie'></div>
+<div class="col-6" id = 'd3bar'></div>
+</div>
+
+<div class="row">
+<div class="col-12" id = 'd3streamgraph'></div>
+</div>
+
+<!-- The parts below between the script tags are all JS code -->
+<script>
+
+
+
+// Dropdown for selection of tickers
+// =======================
+var color1 = '#f2eaf5'
+
+var tickers = [{ticker:'EURUSD'}, 
+				{ticker:'GBPUSD'}, 
+				{ticker:'USDJPY'}]
+
+var tickerselector = d3.select('#tickerselector');
+
+tickerselector.append('select')
+				.selectAll('option')
+				.data(tickers)
+				.enter()
+				.append('option')
+				.attr('value', function(d){
+					return d.ticker;
+				})
+				.text(function(d){
+					return d.ticker;
+				});
+
+
+// End Dropdown for selection of tickers
+
+// =======================
+// Start histogram functions
+
+
+var hcmargin = 40;
+var hcwidth = 400 - 2*hcmargin;
+var hcheight = 250 - 2*hcmargin;
+
+var histsvg = d3.select('#d3histogram')
+			.append('svg')
+			.attr('width', hcwidth + 2*hcmargin)
+			.attr('height', hcheight + 2*hcmargin)
+		.append('g')
+			.attr('transform', 
+				'translate(' + hcmargin + ',' + hcmargin + ')');
+
+histsvg.append('text')
+        .attr('x', hcwidth/2)
+        .attr('y', hcmargin-45)
+        .style('text-anchor', 'middle')
+        .style('fill', color1)
+        .style('font-size', '10px')
+        .text('Distribution of Volumes');
+
+var xAxisCallHist = d3.axisBottom()
+var yAxisCallHist = d3.axisLeft()
+
+var histXAxis = histsvg.append('g')
+                        .attr('transform', 'translate(0,' + hcheight +')')
+                        .attr('class', 'histX axis');
+
+var histYAxis = histsvg.append('g')
+                        .attr('class', 'histY axis');
+
+
+// This is written in a slightly different way from the line chart for illustration purposes
+
+var updateHist = function(ticker){
+
+	d3.csv('../data/' + ticker +'.csv', function(error, data){
+		if (error) throw error;
+
+			data.forEach(function(d){
+				d.Date = parseTime(d.time);
+				d.Price = +d.c;
+				d.Volume = +d.volume;
+			});
+
+			var histX = d3.scaleLinear()
+						.domain(d3.extent(data, function(d){return d.Volume;}))
+						.rangeRound([0, hcwidth]);
+
+			var histY = d3.scaleLinear().range([hcheight, 0]);
+
+
+      xAxisCallHist.scale(histX);
+      yAxisCallHist.scale(histY);
+
+			var histogram = d3.histogram()
+								.value(function(d) { return d.Volume; })
+								.domain(histX.domain())
+								.thresholds(40);
+			// group the data for the bars
+			var bins = histogram(data);
+			// Scale the range of the data in the y domain
+			histY.domain([0, d3.max(bins, function(d) { return d.length;})]);
+
+      var histobars = histsvg.selectAll('.bar')
+                              .remove()
+                              .exit()
+                              .data(bins);
+
+      histobars.enter()
+                    .append('rect')
+                    .attr('class', 'bar')
+                    .transition()
+                    .duration(50)
+                    .attr('x', 1)
+                    .attr('transform', function(d){return 'translate(' + histX(d.x0) + ',' + histY(d.length) +')';})
+                    .attr('width', function(d){return histX(d.x1)-histX(d.x0)-1;})
+                    .attr('height', function(d){return hcheight - histY(d.length);})
+                    .style('fill', color1)
+                    .style('fill-opacity', 0.5);
+
+
+
+        histXAxis.transition().duration(500).call(xAxisCallHist.ticks(5));
+
+
+        histYAxis.transition().duration(500).call(yAxisCallHist.ticks(5));
+
+
+	});
+
+}
+
+// End histogram function
+// =======================
+
+
+// Start boxplot functions
+
+
+var boxmargin = 40;
+var boxwidth = 400 - 2*boxmargin;
+var boxheight = 250 - 2*boxmargin;
+
+var padding = 30;
+var padding2 = 20;
+
+var boxsvg = d3.select('#d3boxplot')
+                .append('svg')
+                .attr('width', boxwidth + 2*boxmargin)
+                .attr('height', boxheight + 2*boxmargin)
+              .append('g')
+                .attr('transform', 
+                'translate(' + boxmargin + ',' + boxmargin + ')');
+
+// var tticker = 'EURUSD';
+var formatNum = d3.format(".2f");
+var xAxisCallBox = d3.axisBottom()
+// var yAxisCallBox = d3.axisLeft()
+
+boxsvg.append('text')
+        .attr('x', boxwidth/2)
+        .attr('y', boxmargin-45)
+        .style('text-anchor', 'middle')
+        .style('fill', color1)
+        .style('font-size', '10px')
+        .text('Annual Price Ranges');
+
+var updateBox = function(ticker){
+
+  var div = d3.select("#d3boxplot")
+            .append("div")
+            .attr("class", "tooltip")
+            .style("opacity", 0);
+
+
+  d3.csv('../data/' + ticker +'.csv', function(error, data){
+    if (error) throw error;
+
+    // console.log(data);
+
+      data.forEach(function(d){
+        d.Date = parseTime(d.time);
+        d.Price = +d.c;
+      });
+
+    // See http://bl.ocks.org/phoebebright/raw/3176159/ for an understanding of nest
+
+    var nestedData = d3.nest()
+                        .key(function(d){return d3.timeYear(d.Date);})
+                        .rollup(function(leaves){
+                          return {
+                            'max': d3.max(leaves, function(d){return d.Price;}),
+                            'min': d3.min(leaves, function(d){return d.Price;}),
+                            'q1': d3.quantile(leaves, 0.25, function(d){return d.Price;}),
+                            'q3': d3.quantile(leaves, 0.75, function(d){return d.Price;}),
+                            'median': d3.median(leaves, function(d){return d.Price;}),
+                            'mean': d3.mean(leaves, function(d){return d.Price;})
+                          }
+                        })
+                        .entries(data);
+
+    // console.log(nestedData);
+    // This is how one accesses the data
+
+
+      var yScale = d3.scaleLinear()
+                      .domain([
+                        d3.min(nestedData, function(d) {
+                          return d.value.min
+                        }), 
+                        d3.max(nestedData, function(d) {
+                          return d.value.max
+                        })
+                        ])
+                      .range([boxheight - padding2, 10]);
+
+      var xScale = d3.scaleBand()
+                      .domain(nestedData.map(function(d) {
+                        return d.key
+                      }))
+                      .range([padding, boxwidth - padding])
+                      .padding(0.4);
+
+      xAxisCallBox.scale(xScale).tickFormat(function(d, i){
+        return d.split(' ')[3];
+      });
+      // yAxisCallBox.scale(yScale);
+
+      // nestedData.forEach(function(d){
+      //   console.log(d.key.split(' ')[3]);
+      //   console.log(d.value.min);
+      //   console.log(d.value.max);
+      //   console.log(yScale(d.value.min) - yScale(d.value.max));
+      // });
+
+
+
+      var boxes = boxsvg.selectAll('.boxplot')
+                        .remove()
+                        .exit()
+                        .data(nestedData);
+
+      boxes.enter()
+                        .append("rect")
+
+                        .attr('class', 'boxplot')
+                        // .transition()
+                        // .duration(100)
+                        .attr("x", function(d) {
+                          return xScale(d.key)
+                        })
+                        .attr("width", xScale.bandwidth())
+                        .attr("y", function(d) {
+                          return yScale(d.value.max)
+                        })
+                        .attr("height", function(d) {
+                          return yScale(d.value.min) - yScale(d.value.max)
+                        })
+                        .on("mouseover", function(d) {
+                               div.transition()
+                                 .duration(200)
+                                 .style("opacity", .6);
+                               div.html('Year: ' + d.key.split(' ')[3] + '<br/>' +
+                                        'Max: ' + formatNum(d.value.max) + '<br/>' +
+                                        'Mean: ' + formatNum(d.value.mean) + '<br/>' +
+                                        'Min: ' + formatNum(d.value.min)
+                                )
+                                 .style("left", (d3.event.pageX - 35) + "px")
+                                 .style("top", (d3.event.pageY - 95) + "px");
+                        })
+                        .on("mouseout", function(d) {
+                               div.transition()
+                                 .duration(500)
+                                 .style("opacity", 0);
+                        })
+
+                        .style('fill', 'steelblue')
+                        .style('stroke', color1);
+
+      var boxlines = boxsvg.selectAll(".boxlines")
+                            .remove()
+                            .exit()
+                            .data(nestedData);
+
+          boxlines.enter()
+                        .append("line")
+                        .attr('class', 'boxlines')
+                        .transition()
+                        .duration(100)
+                        .attr("x1", function(d) {
+                          return xScale(d.key)
+                        })
+                        .attr("x2", function(d) {
+                          return xScale(d.key) + xScale.bandwidth()
+                        })
+                        .attr("y1", function(d) {
+                          return yScale(d.value.mean)
+                        })
+                        .attr("y2", function(d) {
+                          return yScale(d.value.mean)
+                        })
+                        .style('fill', 'none')
+                        .style('stroke', color1);
+
+      boxsvg.append('g')
+            .attr('transform', 'translate(0,' + boxheight + ')')
+            .attr('class', 'boxX axis')
+            .call(xAxisCallBox)
+            .selectAll("text")
+            .style("text-anchor", "end")
+            .attr("dx", "-.8em")
+            .attr("dy", ".15em")
+            .attr("transform", "rotate(-90)");
+
+      // boxsvg.append('g')
+      //       .attr('class', 'boxY axis')
+      //       .call(yAxisCallBox);
+});
+
+}
+// End boxplot function
+
+// =======================
+// Start draw line functions
+
+var lcmargin = 30;
+var lcwidth = 800 - 2*lcmargin;
+var lcheight = 200 - 2*lcmargin;
+
+var linesvg = d3.select('#d3line')
+			.append('svg')
+			.attr('width', lcwidth + 2*lcmargin)
+			.attr('height', lcheight + 2*lcmargin)
+		.append('g')
+			.attr('transform', 
+				'translate(' + lcmargin + ',' + lcmargin + ')');
+
+linesvg.append('text')
+        .attr('x', lcwidth/2)
+        .attr('y', lcmargin-45)
+        .style('text-anchor', 'middle')
+        .style('fill', color1)
+        .style('font-size', '10px')
+        .text('Currency Rates');
+
+
+var parseTime = d3.timeParse('%Y-%m-%d %H:%M:%S');
+
+var lineX = d3.scaleTime().range([0,lcwidth]);
+var lineY = d3.scaleLinear().range([lcheight,0]);
+
+// Remember to surrond the d.Date and d.Price with the x and y scalers declared earlier
+//  I always forget to add this and my chart's scaling goes haywire and flies off the window
+var valueLine = d3.line()
+					.curve(d3.curveCatmullRom)
+					.x(function(d){return lineX(d.Date);})
+					.y(function(d){return lineY(d.Price);});
+
+var xAxisCallLine = d3.axisBottom().ticks(5);
+var yAxisCallLine = d3.axisLeft().ticks(5);
+
+var initialiseLine = function(ticker){
+	// d3 line chart
+	// declaring the width, height and margins
+
+	d3.csv('../data/' + ticker+'.csv', function(error, data){
+		if (error) throw error;
+
+		data.forEach(function(d){
+			d.Date = parseTime(d.time);
+			d.Price = +d.c;
+		});
+
+		lineX.domain(d3.extent(data, function(d){
+			return d.Date;
+		}));
+
+		lineY.domain([
+			d3.min(data, function(d){return d.Price;}),
+			d3.max(data, function(d){return d.Price;})
+		]);
+
+		xAxisCallLine.scale(lineX);
+		yAxisCallLine.scale(lineY);
+
+		linesvg.append('path')
+			.data([data])
+			.attr('class', 'line')
+			.attr('d', valueLine)
+			.style('fill', 'none')
+			.style('stroke', color1)
+			.style('stroke-width', '1px');
+
+    // linesvg.selectAll('.dot')
+    //         .data(data)
+    //         .enter()
+    //         .append('circle')
+    //         .attr('class', 'dot')
+    //         .attr('cx', function(d){
+    //           return lineX(d.Date);
+    //         })
+    //         .attr('cy', function(d){
+    //           return lineY(d.Price);
+    //         })
+    //         .attr('r', 3)
+    //         .style('fill', 'none')
+    //         .style('stroke', 'white')
+    //         .style('stroke-width', '0.1px');
+
+		linesvg.append('g')
+			.attr('transform', 'translate(0,' + lcheight + ')')
+			.attr('class', 'x axis')
+			.call(xAxisCallLine);
+
+		linesvg.append('g')
+			.attr('class', 'y axis')
+			.call(yAxisCallLine);
+
+
+			});
+
+
+
+
+}
+
+
+var updateLine = function(ticker){
+	// d3 line chart
+	// declaring the width, height and margins
+
+	d3.csv('../data/' + ticker+'.csv', function(error, data){
+		if (error) throw error;
+
+		data.forEach(function(d){
+			d.Date = parseTime(d.time);
+			d.Price = +d.c;
+		});
+
+		lineX.domain(d3.extent(data, function(d){
+			return d.Date;
+		}));
+
+		lineY.domain([
+			d3.min(data, function(d){return d.Price;}),
+			d3.max(data, function(d){return d.Price;})
+		]);
+
+		xAxisCallLine.scale(lineX);
+		yAxisCallLine.scale(lineY);
+
+		d3.selectAll('.line')
+			.data([data])
+			.attr('class', 'line')
+			.transition()
+			.duration(1000)
+			.attr('d', valueLine);
+			// .style('fill', 'none')
+			// .style('stroke', color1)
+			// .style('stroke-width', '1px');
+
+		d3.select('.x')
+			.transition()
+			.duration(750)
+			.call(xAxisCallLine);
+
+		d3.select('.y')
+			.transition()
+			.duration(750)
+			.call(yAxisCallLine);
+			});
+
+}
+// End draw line functions
+// =======================
+
+
+// =======================
+// Start returns line functions
+
+// var tticker = 'EURUSD';
+
+var rlmargin = 30;
+var rlwidth = 800 - 2*rlmargin;
+var rlheight = 200 - 2*rlmargin;
+
+var returnssvg = d3.select('#d3returnsline')
+                    .append('svg')
+                    .attr('width', rlwidth + 2*rlmargin)
+                    .attr('height', rlheight + 2*rlmargin)
+                  .append('g')
+                    .attr('transform', 'translate(' + rlmargin + ',' + rlmargin + ')');
+
+
+var returnstitle = returnssvg.append('text')
+                              .text('Monthly Returns')
+                              .attr('x', rlwidth/2)
+                              .attr('y', rlmargin-35)
+                              .style('text-anchor', 'middle')
+                              .style('fill', color1)
+                              .style('font-size', '10px');
+
+var parseNestTime = d3.timeParse('%b-%d-%Y');
+
+var formatTitleTime = d3.timeFormat('%b-%y');
+
+
+var retX = d3.scaleTime().range([0, rlwidth]);
+var retY = d3.scaleLinear().range([rlheight, 0]);
+
+var xAxisCallRets = d3.axisBottom();
+var yAxisCallRets = d3.axisLeft().tickFormat(formatNum);
+
+var xAxisRets = returnssvg.append('g')
+                          .attr('class', 'x axis')
+                          .attr('transform', 'translate(0' + ',' + rlheight + ')');
+
+var yAxisRets = returnssvg.append('g')
+                          .attr('class', 'y axis');
+
+var updateReturnsLine = function(ticker){
+                          
+
+  var monthlyReturnsArray = [];
+
+  d3.csv('../data/' + ticker +'.csv', function(error, data){
+    if (error) throw error;
+
+    // Making the temp value equal to the first closing price so that the first returns is just 0
+    // console.log(+data[0].c);
+    var temp = +data[0].c;
+
+    data.forEach(function(d){
+      d.Date = parseTime(d.time);
+      d.Returns = (+d.c/temp)-1;
+      temp = +d.c;
+    })
+
+
+    // console.log(data);
+
+    var monthlyReturns = d3.nest()
+                            .key(function(d){return d3.timeMonth(d.Date);})
+                            .rollup(function(leaves){
+                              return {
+                                'mean': d3.mean(leaves, function(d){return d.Returns;})
+                              }
+                            })
+                            .entries(data);
+
+    // console.log(monthlyReturns);
+
+    monthlyReturns.forEach(function(d){
+      m = {'Date': parseNestTime(d.key.split(' ').slice(1,4).join('-')), 'Returns': d.value.mean*100};
+      // console.log(m);
+      monthlyReturnsArray.push(m);
+    })
+
+    // console.log(monthlyReturnsArray);
+
+    retX.domain(d3.extent(monthlyReturnsArray, function(d){return d.Date;}));
+    retY.domain([
+      d3.min(monthlyReturnsArray, function(d){return d.Returns;}),
+      d3.max(monthlyReturnsArray, function(d){return d.Returns;})
+    ]);
+
+    xAxisCallRets.scale(retX).ticks(15);
+    yAxisCallRets.scale(retY).ticks(5);
+
+    // This is just to demonstrate how the scaling function retX and retY work
+    // testDate = new Date(2001, 5, 1);
+    // console.log(testDate);
+    // console.log(retX(testDate));
+    // console.log(retY(0.0));
+
+
+    // var retDots = returnssvg.selectAll('.retdot')
+    //                         .remove()
+    //                         .exit()
+    //                         .data(monthlyReturnsArray);
+
+    // retDots.enter()
+    //         .append('circle')
+    //         .transition()
+    //         .duration(1000)
+    //         .attr('class', 'retdot')
+    //         .attr('cx', function(d){
+    //           return retX(d.Date);
+    //         })
+    //         .attr('cy', function(d){
+    //           return retY(d.Returns);
+    //         })
+    //         .attr('r', 1)
+    //         .style('fill', color1);
+
+    var retDots = returnssvg.selectAll('.retdot')
+                            .data(monthlyReturnsArray);
+
+    retDots.enter()
+            .append('circle')
+            .on('mouseover', changeTitle)
+            .on('mouseout', revertTitle)
+            .merge(retDots)
+            .transition()
+            .duration(500)
+            .attr('class', 'retdot')
+            .attr('cx', function(d){
+              return retX(d.Date);
+            })
+            .attr('cy', function(d){
+              return retY(d.Returns);
+            })
+            .attr('r', 2)
+
+            .style('fill', color1);
+
+
+    retDots.exit().remove();
+
+
+    xAxisRets.transition().duration(100).call(xAxisCallRets);
+    yAxisRets.transition().duration(100).call(yAxisCallRets);
+
+
+    function changeTitle(d){
+      // console.log(d.Date);
+      returnstitle.transition()
+                  .duration(500)
+                  .text('Monthly Returns | ' + formatTitleTime(d.Date) + ' | ' + formatNum(d.Returns));
+    }
+
+    function revertTitle(){
+      returnstitle.transition().duration(500).text('Monthly Returns');
+    }
+
+  });
+}
+
+// End returns line functions
+// =======================
+// Start piechart functions
+
+var piemargin = 30;
+var piewidth = 300 - 2*piemargin;
+var pieheight = 400 - 2*piemargin;
+
+var pieradius = Math.min(piewidth, pieheight)/2;
+
+var piesvg = d3.select('#d3pie')
+                    .append('svg')
+                    .attr('width', piewidth + 2*piemargin)
+                    .attr('height', pieheight + 2*piemargin)
+
+var pieg = piesvg.append('g')
+                    .attr('transform', 'translate(' + piewidth/2 + ',' + pieheight/2 + ')');
+
+var pietitle = piesvg.append('text')
+                              .text('Latest Monthly Returns - Equally Weighted Portfolio')
+                              .attr('x', piewidth/2)
+                              .attr('y', piemargin)
+                              .style('text-anchor', 'middle')
+                              .style('fill', color1)
+                              .style('font-size', '10px');
+
+t1 = 'EURUSD';
+t2 = 'GBPUSD';
+t3 = 'USDJPY';
+
+var color = d3.scaleOrdinal(['#c7e6fa', '#8acef3', '#b3e3f1'])
+
+var comparisonArray = [];
+
+var pie = d3.pie()
+            .sort(null)
+            .value(function(d){return d.Return;});
+
+var path = d3.arc()
+              .outerRadius(pieradius-25)
+              .innerRadius(0);
+
+var label = d3.arc()
+              .outerRadius(pieradius-40)
+              .innerRadius(pieradius-40);
+
+d3.csv('../data/' + t1 +'.csv', function(error, data1){
+    if (error) throw error;
+
+    monthdata1 = convert(data1);
+    comparisonArray.push({'Ticker':t1, 'Return': Math.abs(monthdata1[monthdata1.length-1].Returns)});
+    // console.log(monthdata1[monthdata1.length-1].Returns);
+
+    d3.csv('../data/' + t2 +'.csv', function(error, data2){
+        if (error) throw error;
+        
+        monthdata2 = convert(data2);
+        comparisonArray.push({'Ticker':t2, 'Return': Math.abs(monthdata2[monthdata2.length-1].Returns)});
+        // console.log(monthdata2[monthdata2.length-1].Returns);
+        
+        d3.csv('../data/' + t3 +'.csv', function(error, data3){
+            if (error) throw error;
+
+            monthdata3 = convert(data3);
+            comparisonArray.push({'Ticker':t3, 'Return': Math.abs(monthdata3[monthdata3.length-1].Returns)});
+            // console.log(monthdata3[monthdata3.length-1].Returns);
+
+            // console.log(comparisonArray);
+
+            var sum = d3.sum(comparisonArray, function(d){return d.Return;})
+
+            // console.log(sum);
+
+            var arc = pieg.selectAll('.arc')
+                            .data(pie(comparisonArray))
+                            .enter()
+                            .append('g')
+                            .attr('class', 'arc');
+
+            arc.append('path')
+                .attr('class', 'piechart')
+                .attr('d', path)
+                .attr('fill', function(d){return color(d.data.Ticker);})
+                .attr('fill-opacity', 0.5)
+                .style('stroke', color1)
+                .style('stroke-width', '0.4px');
+
+            arc.append('text')
+                .attr('transform', function(d){return 'translate(' + label.centroid(d) +')';})
+                .attr('dy', '-2.5em')
+                .attr('dx', '-3em')
+                .text(function(d){return d.data.Ticker + ' | ' + formatNum(d.data.Return/sum)*100 +'%';})
+                .style('fill', color1)
+                .style('font-size', '10px');
+
+        });
+
+
+
+    });
+
+});
+
+// End piecharts functions
+// =======================
+
+// Start barcharts functions
+// =======================
+
+
+var barmargin = 30;
+var barwidth = 300 - 2*barmargin;
+var barheight = 400 - 2*barmargin;
+
+var barradius = Math.min(barwidth, barheight)/2;
+
+var barsvg = d3.select('#d3bar')
+                    .append('svg')
+                    .attr('width', barwidth + 2*barmargin)
+                    .attr('height', barheight + 2*barmargin)
+                  .append('g')
+                    .attr('transform', 'translate(' + barmargin + ',' + barmargin + ')');
+
+var bartitle = barsvg.append('text')
+                              .text('Latest Annual Mean Returns')
+                              .attr('x', barwidth/2)
+                              .attr('y', barmargin-30)
+                              .style('text-anchor', 'middle')
+                              .style('fill', color1)
+                              .style('font-size', '10px');
+
+t1 = 'EURUSD';
+t2 = 'GBPUSD';
+t3 = 'USDJPY';
+
+var color = d3.scaleOrdinal(['#c7e6fa', '#8acef3', '#b3e3f1'])
+
+var xBar = d3.scaleBand().range([0, barwidth]).padding(0.5);
+var yBar = d3.scaleLinear().range([barheight, 50]);
+
+var annualReturnsArray = [];
+
+
+d3.csv('../data/' + t1 +'.csv', function(error, data1){
+    if (error) throw error;
+
+    annualdata1 = convertAnnual(data1);
+    annualReturnsArray.push({'Ticker':t1, 'Return': Math.abs(annualdata1[annualdata1.length-1].Returns)});
+
+
+    d3.csv('../data/' + t2 +'.csv', function(error, data2){
+        if (error) throw error;
+        
+      annualdata2 = convertAnnual(data2);
+      annualReturnsArray.push({'Ticker':t2, 'Return': Math.abs(annualdata2[annualdata2.length-1].Returns)});
+
+        
+        d3.csv('../data/' + t3 +'.csv', function(error, data3){
+            if (error) throw error;
+
+            annualdata3 = convertAnnual(data3);
+            annualReturnsArray.push({'Ticker':t3, 'Return': Math.abs(annualdata3[annualdata3.length-1].Returns)});
+
+            // console.log(annualReturnsArray);
+
+            xBar.domain(annualReturnsArray.map(function(d){return d.Ticker;}));
+            yBar.domain([0, d3.max(annualReturnsArray, function(d){return d.Return;})]);
+
+            var bars = barsvg.selectAll('.barcharts')
+                              .data(annualReturnsArray)
+                              .enter()
+                              .append('rect')
+                              .attr('class', 'barcharts')
+                              .attr('x', function(d){return xBar(d.Ticker);})
+                              .attr('width', xBar.bandwidth())
+                              .attr('y', function(d){return yBar(d.Return);})
+                              .attr('height', function(d){return barheight-yBar(d.Return);})
+                              .style('fill', function(d){
+                                return color(d.Ticker);
+                              })
+                              .style('stroke', '1px');
+
+            var barxAxis = barsvg.append('g')
+                                  .attr('class', 'x axis')
+                                  .attr('transform', 'translate(0,' + barheight + ')')
+                                  .call(d3.axisBottom().scale(xBar));
+
+            var baryAxis = barsvg.append('g')
+                                  .attr('class', 'y axis')
+                                  .call(d3.axisLeft().scale(yBar).ticks(5).tickFormat(formatNum)); 
+
+
+        });
+
+
+    });
+
+});
+
+// End barcharts functions
+// =======================
+
+
+
+// Start streamgraph functions
+// =======================
+
+
+var streammargin = 30;
+var streamwidth = 800 - 2*streammargin;
+var streamheight = 400 - 2*streammargin;
+
+var streamsvg = d3.select('#d3streamgraph')
+                    .append('svg')
+                    .attr('width', streamwidth + 2*streammargin)
+                    .attr('height', streamheight + 2*streammargin)
+                  .append('g')
+                    .attr('transform', 'translate(' + streammargin + ',' + streammargin + ')');
+
+var streamtitle = streamsvg.append('text')
+                              .text('Streamgraph of Annual Returns - Max & Min')
+                              .attr('x', streamwidth/2)
+                              .attr('y', streammargin-30)
+                              .style('text-anchor', 'middle')
+                              .style('fill', color1)
+                              .style('font-size', '10px');
+
+t1 = 'EURUSD';
+t2 = 'GBPUSD';
+t3 = 'USDJPY';
+
+var colorpal = ['#c7e6fa', '#8acef3', '#b3e3f1']
+
+var xStream = d3.scaleTime().range([0, streamwidth]);
+var yStream = d3.scaleLinear().range([streamheight, 0]);
+
+// var annualReturnsArray = [];
+
+var streamMax = -Infinity;
+var streamMin = Infinity;
+
+var areaLine = d3.area()
+                  .curve(d3.curveCatmullRom)
+                  .x(function(d){return xStream(d.Date);})
+                  .y0(function(d){return yStream(d.Min);})
+                  .y1(function(d){return yStream(d.Max);});
+
+d3.csv('../data/' + t1 +'.csv', function(error, data1){
+    if (error) throw error;
+
+    annualdata1 = convertAnnual(data1);
+    max1 = d3.max(annualdata1, function(d){return d.Returns;});
+    min1 = d3.min(annualdata1, function(d){return d.Returns;});
+
+    if (max1 > streamMax) {streamMax = max1;};
+    if (min1 < streamMin) {streamMin = min1;};
+
+    // console.log(max1, min1);
+    // console.log(streamMax, streamMin);
+
+    d3.csv('../data/' + t2 +'.csv', function(error, data2){
+        if (error) throw error;
+        
+      annualdata2 = convertAnnual(data2);
+      max2 = d3.max(annualdata2, function(d){return d.Returns;});
+      min2 = d3.min(annualdata2, function(d){return d.Returns;});
+
+      if (max2 > streamMax) {streamMax = max2;};
+      if (min2 < streamMin) {streamMin = min2;};
+
+      // console.log(max2, min2);
+      // console.log(streamMax, streamMin);
+        
+        d3.csv('../data/' + t3 +'.csv', function(error, data3){
+            if (error) throw error;
+
+            annualdata3 = convertAnnual(data3);
+            max3 = d3.max(annualdata3, function(d){return d.Returns;});
+            min3 = d3.min(annualdata3, function(d){return d.Returns;});
+            
+            if (max3 > streamMax) {streamMax = max3;};
+            if (min3 < streamMin) {streamMin = min3;};
+            
+            // console.log(max3, min3);
+            // console.log(streamMax, streamMin);
+
+            xStream.domain(d3.extent(data1, function(d){return d.Date;}));
+            yStream.domain([streamMin, streamMax]);
+
+            var div = d3.select('#d3streamgraph')
+                        .append('div')
+                        .attr('class', 'streamoverlay')
+                        .attr('fill-opacity', 0)
+                        .attr('opacity', 0);
+
+            var area1 = streamsvg.append('path')
+                                  .on('mouseover', streamHighlight)
+                                  .on('mouseout', streamRevert)
+                                  .data([annualdata1])
+                                  .attr('id', t1)
+                                  .attr('class', 'streamgraph')
+                                  .attr('d', areaLine)
+                                  .style('fill', colorpal[0])
+                                  .style('stroke', color1)
+                                  .style('fill-opacity', '0.3');
+
+            var area2 = streamsvg.append('path')
+                                  .on('mouseover', streamHighlight)
+                                  .on('mouseout', streamRevert)
+                                  .data([annualdata2])
+                                  .attr('id', t2)
+                                  .attr('class', 'streamgraph')
+                                  .attr('d', areaLine)
+                                  .style('fill', colorpal[1])
+                                  .style('stroke', color1)
+                                  .style('fill-opacity', '0.3');
+
+            var area3 = streamsvg.append('path')
+                                  .on('mouseover', streamHighlight)
+                                  .on('mouseout', streamRevert)
+                                  .data([annualdata3])
+                                  .attr('id', t3)
+                                  .attr('class', 'streamgraph')
+                                  .attr('d', areaLine)
+                                  .style('fill', colorpal[2])
+                                  .style('stroke', color1)
+                                  .style('fill-opacity', '0.3');
+
+            var xAxis = streamsvg.append('g')
+                                  .attr('class', 'x axis stream')
+                                  .attr('transform', 'translate(0,' + streamheight + ')')
+                                  .call(d3.axisBottom().scale(xStream));
+
+            function streamHighlight(){
+              var stream = d3.select(this);
+              var ticker = d3.select(this).attr('id');
+              console.log(ticker);
+
+              stream.transition().duration(1000)
+                    .style('fill-opacity', '0.8')
+                    .style('stroke-width', '3px');
+
+              div.transition()
+                  .duration(200)
+                 .style("opacity", .9)
+                 .style('fill-opacity', 0.0);
+            
+              div.text(ticker)                        
+                  .attr('x', streamwidth/2)
+                  .attr('y', streammargin)
+                  .style('font-size', '11px');
+            }
+
+            function streamRevert(){
+              var stream = d3.select(this);
+              stream.transition().duration(1000)
+                    .style('fill-opacity', '0.3')
+                    .style('stroke-width', '0.5px');  
+
+              div.transition()
+                  .duration(500)
+                 .style("opacity", 0)
+                 .style('fill-opacity', 0.0);
+
+              div.transition().duration(500).style('font-size', '0px');
+            }
+
+
+        });
+
+
+    });
+
+});
+
+// End streamgraph functions
+// =======================
+
+
+
+
+
+// Convenience functions
+
+// Function to get monthly returns from the loaded CSV
+// =======================
+var convert = function(data){
+
+    var monthlyReturnsArray = []
+    var temp = +data[0].c;
+
+    data.forEach(function(d){
+      d.Date = parseTime(d.time);
+      d.Returns = (+d.c/temp)-1;
+      temp = +d.c;
+    })
+
+
+    // console.log(data);
+
+    var monthlyReturns = d3.nest()
+                            .key(function(d){return d3.timeMonth(d.Date);})
+                            .rollup(function(leaves){
+                              return {
+                                'mean': d3.mean(leaves, function(d){return d.Returns;})
+                              }
+                            })
+                            .entries(data);
+
+    monthlyReturns.forEach(function(d){
+      m = {'Date': parseNestTime(d.key.split(' ').slice(1,4).join('-')), 'Returns': d.value.mean*100};
+      // console.log(m);
+      monthlyReturnsArray.push(m);
+    })
+
+    return monthlyReturnsArray;
+
+
+}
+
+
+
+// Function to get annual returns from the loaded CSV
+// =======================
+var convertAnnual = function(data){
+
+    var annualReturnsArray = []
+    var temp = +data[0].c;
+
+    data.forEach(function(d){
+      d.Date = parseTime(d.time);
+      d.Returns = (+d.c/temp)-1;
+      temp = +d.c;
+    })
+
+
+    // console.log(data);
+
+    var annualReturns = d3.nest()
+                            .key(function(d){return d3.timeYear(d.Date);})
+                            .rollup(function(leaves){
+                              return {
+                                'mean': d3.mean(leaves, function(d){return d.Returns;}),
+                                'max': d3.max(leaves, function(d){return d.Returns;}),
+                                'min': d3.min(leaves, function(d){return d.Returns;})
+                              }
+                            })
+                            .entries(data);
+
+    annualReturns.forEach(function(d){
+      m = {'Date': parseNestTime(d.key.split(' ').slice(1,4).join('-')), 
+            'Returns': d.value.mean*100, 
+            'Max': d.value.max,
+            'Min': d.value.min
+          };
+      // console.log(m);
+      annualReturnsArray.push(m);
+    })
+
+    return annualReturnsArray;
+
+
+}
+
+
+// =======================
+// =======================
+// Start drawing all the charts!!
+
+initialiseLine('EURUSD');
+updateHist('EURUSD');
+updateBox('EURUSD');
+updateReturnsLine('EURUSD');
+
+tickerselector.on('change', function(){
+	ticker = d3.select(this).select('select').property('value');
+	updateLine(ticker);
+	updateHist(ticker);
+  updateBox(ticker);
+  updateReturnsLine(ticker);
+})
+// =======================
+
+</script>
+</body>
+
+
+
+
