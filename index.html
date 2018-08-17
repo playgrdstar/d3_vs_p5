@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<head>
+<!-- Bootstrap used for the positioning divs -->
+<!-- Latest compiled and minified CSS -->
+<link rel="stylesheet" href="./lib/bootstrap3/css/bootstrap.min.css">
+<link rel="stylesheet" href="./lib/css/font-awesome.min.css">
+<!-- Latest compiled and minified JavaScript -->
+<script src="./lib/jquery/jquery-3.2.1.min.js"></script>
+<script src="./lib/bootstrap3/js/bootstrap.min.js"></script>
+<script src="./lib/d3/d3.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.5.14/p5.js"></script>
+
+<style>
+
+/*To center (horizontally and vertically) the contents of the div*/
+div {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#d3canvas {
+  margin:0;
+  background-color: #BBACC1;
+  background:linear-gradient(135deg, #BBACC1 0%,  #F7D1CD 75%);
+}
+
+#p5canvas {
+  margin:0;
+  background-color: #BBACC1;
+  background:linear-gradient(135deg, #BBACC1 0%,  #F7D1CD 75%);
+}
+</style>
+</head>
+
+
+<body>
+
+<!-- The row, col etc are Bootstrap classes that allow for responsive viewing and placement -->
+<!-- You could write the CSS yourself, but why do so when there is a framework to help you! -->
+
+<div class='row'>
+
+  <div class="col-sm-6" id='d3canvas'>
+    <!-- <p style="color:grey; font-size:75%;">d3</p> -->
+  </div>
+
+  <div class="col-sm-6" id='p5canvas'>
+  </div>
+
+</div>
+
+<!-- <div class='row'>
+
+  <div class="col-sm-4">
+    <p style="color:grey; font-size:75%;">p5</p>
+  </div>
+
+  <div class="col-sm-4" id = 'p5canvas'>
+  </div>
+
+  <div class="col-sm-4">
+  </div>
+
+</div> -->
+
+<!-- The parts below between the script tags are all JS code -->
+<script>
+
+var colorsPalette = ['pink', 'skyblue', 'deepskyblue', 'royalblue', 'steelblue', 'lavender', 'indigo', 'violet', 'pink', 'deeppink'];
+
+  var width = 500;
+  var height = 500;
+  var padding = 40;
+  var svg = d3.select('#d3canvas').append('svg')
+                                  .attr('width', width)
+                                  .attr('height', height)
+                            .append('g')
+                                  .attr('transform', 'translate('+width/2+','+height/2+')');
+
+  var lines = 1000;
+  var linethickness = 0.1;
+  var circumference = Math.PI * 20;
+  var space = circumference/lines;
+
+  var linesdata = d3.range(lines).map(function(d,i){
+    return{
+    startAngle: (i*space),
+    endAngle: (i*space)+linethickness*0.5,
+    outerRadius: width/20 * i/100,
+    strokeWidth: 0.05,
+    fillopacity: 0.1,
+    fillcolor: colorsPalette[i%10]
+    }
+  });
+
+  var d3arc = d3.arc().innerRadius(50);
+
+  var segment = svg.selectAll('segment')
+                    .data(linesdata)
+                    .enter()
+                    .append('path')
+                    .attr('class', 'segment')
+                    .style('fill', function(d){
+                      return d.fillcolor;
+                    })
+                    .style('stroke', 'steelblue')
+                    .style('fill-opacity', function(d){
+                      return d.fillopacity;
+                    })
+                    .style('stroke-width', function(d){
+                      return d.strokeWidth;
+                    })
+                    .transition()
+                    .duration(2000)
+                    .delay(function(d,i){
+                    return i*20;
+                    })
+                    .attrTween('d', aTween());
+
+function aTween(){
+  return function(d){
+  var interpolate = d3.interpolateNumber(1, d.outerRadius);
+      return function(t){
+      d.outerRadius = interpolate(t);
+      return d3arc(d);
+      };
+  };
+}
+
+var i = 0;
+var colorsPalette;
+
+function setup() {
+    colorsPalette = [color(146, 167, 202,30),
+            color(186, 196, 219,30),
+            color(118, 135, 172,30),
+            color(76, 41, 81,30),
+            color(144, 62, 92,30),
+            color(178, 93, 119,30),
+            color(215, 118, 136,30),
+            color(246, 156, 164,30),];
+  var width = 500;
+  var height = 500;
+  // var width = d3.select('#p5canvas').node().getBoundingClientRect().width;
+  // var height = width;
+  var canvas = createCanvas(width, height);
+
+  canvas.parent('p5canvas');
+  // createCanvas(800, 800);
+  background(0,0);
+  ellipseMode(CENTER);
+
+}
+
+function draw() {
+  // rotate(20);
+  fill(colorsPalette[floor(random(8))],100);
+  stroke(colorsPalette[floor(random(8))],255);
+  strokeWeight(0.5);
+  arc(width/2,height/2,linesdata[i].outerRadius*2,linesdata[i].outerRadius*2,
+      linesdata[i].startAngle,linesdata[i].endAngle,PIE)
+  if(i<linesdata.length-1){
+    i++;
+  } else {
+    noLoop();
+  }
+
+}
+
+
+</script>
+
+</body>
+
+
+
+
